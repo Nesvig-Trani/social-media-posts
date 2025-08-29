@@ -1,0 +1,14 @@
+[project]
+name = "social-media-scrap"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-api-python-client>=2.179.0",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
+    "tweepy>=4.16.0",
+]
