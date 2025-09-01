@@ -1,113 +1,99 @@
-from typing import Dict, Optional
-from core.base import BaseSocialMediaService
-from core.models import SocialMediaPost
-from core.exceptions import SocialMediaFetcherError
-from adapters.youtube_adapter import YouTubeAdapter
-from adapters.twitter_adapter import TwitterAdapter
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+import logging
+from contextlib import asynccontextmanager
+
+from api.middleware import TimingMiddleware
+from api.routes import channels, health, posts
+from config.settings import settings
 
 
-class SocialMediaFetcher:
-    """Main class that orchestrates fetching posts from different platforms"""
-
-    def __init__(self):
-        self._services: Dict[str, BaseSocialMediaService] = {}
-        self._register_services()
-
-    def _register_services(self):
-        """Register available social media services"""
-        try:
-            youtube_adapter = YouTubeAdapter()
-            self._services["youtube"] = youtube_adapter.service
-        except Exception as e:
-            print(f"Warning: YouTube service not available: {e}")
-
-        try:
-            twitter_adapter = TwitterAdapter()
-            self._services["twitter"] = twitter_adapter.service
-        except Exception as e:
-            print(f"Warning: Twitter service not available: {e}")
-
-    def get_available_platforms(self) -> list[str]:
-        """Get list of available platforms"""
-        return list(self._services.keys())
-
-    def get_latest_post(
-        self, platform: str, channel_identifier: str
-    ) -> Optional[SocialMediaPost]:
-        """Get the latest post from specified platform and channel"""
-        if platform not in self._services:
-            raise ValueError(
-                f"Platform '{platform}' not supported. "
-                f"Available platforms: {self.get_available_platforms()}"
-            )
-
-        try:
-            service = self._services[platform]
-            return service.get_latest_post(channel_identifier)
-        except SocialMediaFetcherError:
-            raise
-        except Exception as e:
-            raise SocialMediaFetcherError(f"Unexpected error: {e}")
-
-    def get_latest_posts_from_multiple_channels(
-        self, channels: Dict[str, str]
-    ) -> Dict[str, Optional[SocialMediaPost]]:
-        """Get latest posts from multiple channels
-
-        Args:
-            channels: Dict with platform as key and channel_identifier as value
-                     e.g., {'youtube': 'channel_name', 'twitter': 'username'}
-
-        Returns:
-            Dict with platform as key and post as value
-        """
-        results = {}
-
-        for platform, channel_identifier in channels.items():
-            try:
-                results[platform] = self.get_latest_post(platform, channel_identifier)
-            except Exception as e:
-                print(f"Error fetching from {platform}: {e}")
-                results[platform] = None
-
-        return results
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO if not settings.DEBUG else logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
-# Example usage
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Debug mode: {settings.DEBUG}")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="A scalable API for fetching the latest posts from various social media platforms",
+    version=settings.APP_VERSION,
+    docs_url=settings.DOCS_URL,
+    redoc_url=settings.REDOC_URL,
+    lifespan=lifespan,
+)
+
+# Add middleware
+app.add_middleware(TimingMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(health.router, prefix=settings.API_V1_PREFIX)
+app.include_router(posts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(channels.router, prefix=settings.API_V1_PREFIX)
+
+
+@app.get("/")
+async def root():
+    """Root endpoint - redirects to documentation"""
+    return RedirectResponse(url=settings.DOCS_URL)
+
+
+@app.get("/api")
+async def api_info():
+    """API information endpoint"""
+    return {
+        "name": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs_url": settings.DOCS_URL,
+        "health_check": f"{settings.API_V1_PREFIX}/health",
+    }
+
+
+# Error handlers
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    return HTTPException(
+        status_code=404,
+        detail={
+            "error": "Not Found",
+            "message": "The requested resource was not found",
+            "docs": settings.DOCS_URL,
+        },
+    )
+
+
 if __name__ == "__main__":
-    # Create fetcher instance
-    fetcher = SocialMediaFetcher()
+    import uvicorn
 
-    # Check available platforms
-    print(f"Available platforms: {fetcher.get_available_platforms()}")
-
-    #Get latest post from YouTube
-    try:
-        youtube_post = fetcher.get_latest_post("youtube", "@mkbhd")
-        if youtube_post:
-            print(f"Latest YouTube post: {youtube_post.content}")
-            print(f"Posted at: {youtube_post.created_at}")
-            print(f"Views: {youtube_post.engagement.get('views', 'N/A')}")
-            print(f"Video URL: {youtube_post.url}")
-    except Exception as e:
-        print(f"Error fetching YouTube post: {e}")
-
-    # Get latest post from Twitter
-    try:
-        twitter_post = fetcher.get_latest_post("twitter", "josevalim")
-        if twitter_post:
-            print(f"Latest tweet: {twitter_post.content}")
-            print(f"Posted at: {twitter_post.created_at}")
-            print(f"Likes: {twitter_post.engagement.get('likes', 'N/A')}")
-    except Exception as e:
-        print(f"Error fetching Twitter post: {e}")
-
-    # Get posts from multiple channels at once
-    # channels = {"youtube": "@mkbhd", "twitter": "elonmusk"}
-
-    # posts = fetcher.get_latest_posts_from_multiple_channels(channels)
-    # for platform, post in posts.items():
-    #     if post:
-    #         print(f"{platform.capitalize()}: {post.content[:100]}...")
-    #     else:
-    #         print(f"{platform.capitalize()}: No post found or error occurred")
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG,
+        log_level="info" if not settings.DEBUG else "debug",
+    )

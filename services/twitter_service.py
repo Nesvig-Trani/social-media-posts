@@ -1,7 +1,7 @@
 import tweepy
 from typing import Optional
 from core.base import BaseSocialMediaService
-from core.models import SocialMediaPost, ChannelInfo
+from core.models import Platform, SocialMediaPost, ChannelInfo
 from core.exceptions import APIError, AuthenticationError, ChannelNotFoundError
 from config.settings import settings
 
@@ -15,12 +15,14 @@ class TwitterService(BaseSocialMediaService):
             raise AuthenticationError("Twitter Bearer token not provided")
 
         try:
-            self.client = tweepy.Client(bearer_token=settings.TWITTER_BEARER_TOKEN, wait_on_rate_limit=True)
+            self.client = tweepy.Client(
+                bearer_token=settings.TWITTER_BEARER_TOKEN, wait_on_rate_limit=True
+            )
         except Exception as e:
             raise AuthenticationError(f"Failed to initialize Twitter client: {e}")
 
-    def _get_platform_name(self) -> str:
-        return "twitter"
+    def _get_platform_name(self) -> Platform:
+        return Platform.TWITTER
 
     def validate_credentials(self) -> bool:
         """Validate Twitter API credentials"""
@@ -65,8 +67,6 @@ class TwitterService(BaseSocialMediaService):
             # Get user info first
             channel_info = self.get_channel_info(channel_identifier)
 
-            print("channel info", channel_info)
-
             # Get the latest tweet
             tweets = self.client.get_users_tweets(
                 id=channel_info.id,
@@ -75,7 +75,6 @@ class TwitterService(BaseSocialMediaService):
                 expansions=["attachments.media_keys"],
                 media_fields=["url", "preview_image_url"],
             )
-
 
             if not tweets.data:  # type: ignore
                 return None

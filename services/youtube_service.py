@@ -3,7 +3,7 @@ from googleapiclient.errors import HttpError
 from typing import Optional
 from datetime import datetime
 from core.base import BaseSocialMediaService
-from core.models import SocialMediaPost, ChannelInfo
+from core.models import Platform, SocialMediaPost, ChannelInfo
 from core.exceptions import APIError, AuthenticationError, ChannelNotFoundError
 from config.settings import settings
 
@@ -21,8 +21,8 @@ class YouTubeService(BaseSocialMediaService):
         except Exception as e:
             raise AuthenticationError(f"Failed to initialize YouTube client: {e}")
 
-    def _get_platform_name(self) -> str:
-        return "youtube"
+    def _get_platform_name(self) -> Platform:
+        return Platform.YOUTUBE
 
     def validate_credentials(self) -> bool:
         """Validate YouTube API credentials"""
