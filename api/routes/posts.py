@@ -1,7 +1,4 @@
-from datetime import datetime, timezone
-from re import S
-from fastapi import APIRouter, Depends, HTTPException, Path, Body
-from typing import Dict
+from fastapi import APIRouter, Path, Body
 
 from api.dependencies import FetcherDep, validate_platform
 from api.exceptions.api_exceptions import map_to_http_exception
@@ -10,7 +7,6 @@ from api.response_models.responses import (
     MultiPostResponse,
     PostResponse,
 )
-from core.models import Platform, SocialMediaPost
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 

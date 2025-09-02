@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Path
 
 from api.dependencies import FetcherDep, validate_platform
 from api.exceptions.api_exceptions import map_to_http_exception
